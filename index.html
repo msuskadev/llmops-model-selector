@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wybór modelu – ranking ważony</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f27;--mu:#667085;--bd:#d9dde3;--ac:#1f3864;--acx:#fff;--in:#fff8e1;--ok:#1a7f4b;--bad:#c62828;--r1:#f8cbad;--r2:#fce4d6;--r3:#fff2cc;--r4:#e2efda;--r5:#c6efce;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171c;--card:#1d2128;--tx:#e8eaed;--mu:#9aa3b0;--bd:#343a44;--ac:#7aa2f7;--acx:#10131a;--in:#2b2716;--ok:#5fd38d;--bad:#ff8a80;--r1:#6b3a2c;--r2:#5a3b2f;--r3:#5a4f27;--r4:#35502f;--r5:#2c6040}}
+:root[data-theme="dark"]{--bg:#14171c;--card:#1d2128;--tx:#e8eaed;--mu:#9aa3b0;--bd:#343a44;--ac:#7aa2f7;--acx:#10131a;--in:#2b2716;--ok:#5fd38d;--bad:#ff8a80;--r1:#6b3a2c;--r2:#5a3b2f;--r3:#5a4f27;--r4:#35502f;--r5:#2c6040}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 Arial,Helvetica,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 4px}.sub{color:var(--mu);margin:0 0 14px}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+nav button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:8px;cursor:pointer;font:inherit}
+nav button.on{background:var(--ac);color:var(--acx);border-color:var(--ac);font-weight:bold}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th{background:var(--ac);color:var(--acx);padding:8px;text-align:left;font-size:13px}
+td{border-bottom:1px solid var(--bd);padding:5px;vertical-align:top}
+input,select,textarea{font:inherit;color:var(--tx);background:var(--in);border:1px solid var(--bd);border-radius:6px;padding:6px;width:100%}
+textarea{resize:vertical;min-height:70px}
+input.w{width:80px;text-align:center}
+.btn{border:1px solid var(--ac);background:var(--ac);color:var(--acx);padding:7px 12px;border-radius:8px;cursor:pointer;font:inherit}
+.btn.sec{background:transparent;color:var(--ac)}.btn.x{background:transparent;color:var(--bad);border-color:var(--bd);padding:5px 9px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mu{color:var(--mu)}.ok{color:var(--ok);font-weight:bold}.bad{color:var(--bad);font-weight:bold}
+.c{text-align:center}.sc{font-weight:bold;text-align:center;white-space:nowrap}
+.s1{background:var(--r1)}.s2{background:var(--r2)}.s3{background:var(--r3)}.s4{background:var(--r4)}.s5{background:var(--r5)}
+.rank1 td{background:var(--r5);font-weight:bold}
+.leg td{padding:6px 10px;border:1px solid var(--bd)}
+.empty{color:var(--mu);padding:20px;text-align:center}
+</style>
+</head>
+<body>
+<main>
+<h1>Wybór modelu – ranking ważony</h1>
+<p class="sub">Wagi kryteriów, scenariusze (prompty testowe), kandydaci i oceny 1–5 → automatyczny ranking. Dane zapisują się w tej przeglądarce.</p>
+<nav id="nav"></nav>
+<div id="view"></div>
+</main>
+<script>
+const LEG=[[1,"Nie spełnia wymagań, poważne błędy"],[2,"Spełnia wymagania w ograniczonym zakresie, częste błędy"],[3,"Akceptowalny, ale wymaga poprawek lub nadzoru"],[4,"Dobry, sporadyczne drobne błędy"],[5,"Bardzo dobry, spełnia wymagania w sposób konsekwentny"]];
+const TABS=[["c","Kryteria"],["s","Scenariusze"],["m","Kandydaci"],["r","Oceny"],["k","Ranking"]];
+const KEY="ranking-modeli-v1";
+let S={c:[],s:[],m:[],r:[]},tab="c",n=0;
+try{const x=JSON.parse(localStorage.getItem(KEY)||"null");if(x&&x.c)S=x}catch(e){}
+const uid=()=>Date.now().toString(36)+(n++);
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+const $=id=>document.getElementById(id);
+const lab=(o,d)=>o.name&&o.name.trim()?o.name:d;
+const f1=x=>x==null?"–":x.toFixed(2);
+
+function score(row){let num=0,den=0;S.c.forEach(c=>{const v=+row.v[c.id];if(v){num+=v*c.w;den+=c.w}});return den?num/den:null}
+function cls(v){return v==null?"":"s"+Math.min(5,Math.max(1,Math.round(v)))}
+function ranking(){
+  const res=S.m.map(m=>{const rs=S.r.filter(r=>r.m===m.id).map(r=>({s:r.s,v:score(r)})).filter(x=>x.v!=null);
+    const avg=rs.length?rs.reduce((a,x)=>a+x.v,0)/rs.length:null;
+    const per={};S.s.forEach(s=>{const q=rs.filter(x=>x.s===s.id);per[s.id]=q.length?q.reduce((a,x)=>a+x.v,0)/q.length:null});
+    return {m,avg,n:rs.length,per}});
+  res.forEach(x=>{x.rank=x.avg==null?null:1+res.filter(y=>y.avg!=null&&y.avg>x.avg+1e-9).length});
+  return res.sort((a,b)=>(a.rank??99)-(b.rank??99));
+}
+const sumW=()=>S.c.reduce((a,c)=>a+(+c.w||0),0);
+
+function nav(){$("nav").innerHTML=TABS.map(([k,t])=>`<button data-tab="${k}" class="${k===tab?"on":""}">${t}</button>`).join("")}
+function view(){
+  nav();const v=$("view");
+  if(tab==="c")v.innerHTML=`<div class="card"><div class="scroll"><table><tr><th>Kryterium</th><th style="width:120px">Waga (%)</th><th style="width:50px"></th></tr>
+  ${S.c.map(c=>`<tr><td><input data-t="c" data-id="${c.id}" data-f="name" value="${esc(c.name)}" placeholder="np. Jakość odpowiedzi"></td><td><input class="w" type="number" min="0" max="100" step="1" data-t="c" data-id="${c.id}" data-f="w" value="${c.w}"></td><td><button class="btn x" data-del="c" data-id="${c.id}">✕</button></td></tr>`).join("")||`<tr><td colspan="3" class="empty">Brak kryteriów – dodaj pierwsze.</td></tr>`}
+  <tr><td><b>Suma</b></td><td class="c"><b id="sumw"></b></td><td></td></tr></table></div>
+  <div class="row" style="margin-top:10px"><button class="btn" data-add="c">+ Dodaj kryterium</button><button class="btn sec" id="eq">Wyrównaj wagi</button><span id="wmsg"></span></div></div>`;
+  if(tab==="s")v.innerHTML=`<div class="card"><p class="mu" style="margin-top:0">Każdy scenariusz to prompt uruchamiany na wszystkich modelach z zakładki Kandydaci.</p>
+  ${S.s.map((s,i)=>`<div class="card" style="background:var(--bg)"><div class="row"><b>#${i+1}</b><input style="flex:1" data-t="s" data-id="${s.id}" data-f="name" value="${esc(s.name)}" placeholder="Nazwa scenariusza"><button class="btn x" data-del="s" data-id="${s.id}">✕</button></div>
+  <textarea data-t="s" data-id="${s.id}" data-f="prompt" placeholder="Prompt do uruchomienia">${esc(s.prompt)}</textarea>
+  <input style="margin-top:6px" data-t="s" data-id="${s.id}" data-f="notes" value="${esc(s.notes)}" placeholder="Oczekiwany rezultat / uwagi"></div>`).join("")||`<div class="empty">Brak scenariuszy.</div>`}
+  <button class="btn" data-add="s">+ Dodaj scenariusz</button></div>`;
+  if(tab==="m")v.innerHTML=`<div class="card"><div class="scroll"><table><tr><th>Model</th><th>Opis / wersja</th><th style="width:50px"></th></tr>
+  ${S.m.map(m=>`<tr><td><input data-t="m" data-id="${m.id}" data-f="name" value="${esc(m.name)}" placeholder="Nazwa modelu"></td><td><input data-t="m" data-id="${m.id}" data-f="desc" value="${esc(m.desc)}"></td><td><button class="btn x" data-del="m" data-id="${m.id}">✕</button></td></tr>`).join("")||`<tr><td colspan="3" class="empty">Brak kandydatów.</td></tr>`}</table></div>
+  <div style="margin-top:10px"><button class="btn" data-add="m">+ Dodaj model</button></div></div>`;
+  if(tab==="r"){
+    const mo=cur=>`<option value="">— wybierz —</option>`+S.m.map(m=>`<option value="${m.id}"${m.id===cur?" selected":""}>${esc(lab(m,"(model bez nazwy)"))}</option>`).join("");
+    const so=cur=>`<option value="">— wybierz —</option>`+S.s.map(s=>`<option value="${s.id}"${s.id===cur?" selected":""}>${esc(lab(s,"(scenariusz bez nazwy)"))}</option>`).join("");
+    v.innerHTML=`<div class="card"><div class="scroll"><table><tr><th style="min-width:150px">Model</th><th style="min-width:170px">Scenariusz</th>${S.c.map(c=>`<th class="c" style="min-width:80px">${esc(lab(c,"(kryt.)"))}<br><small>${c.w}%</small></th>`).join("")}<th class="c">Wynik</th><th style="width:50px"></th></tr>
+    ${S.r.map(r=>`<tr data-row="${r.id}"><td><select data-t="r" data-id="${r.id}" data-f="m">${mo(r.m)}</select></td><td><select data-t="r" data-id="${r.id}" data-f="s">${so(r.s)}</select></td>
+    ${S.c.map(c=>{const x=r.v[c.id]||"";return `<td><select class="${x?"s"+x:""}" data-t="r" data-id="${r.id}" data-cid="${c.id}"><option value=""></option>${[1,2,3,4,5].map(i=>`<option value="${i}"${+x===i?" selected":""}>${i}</option>`).join("")}</select></td>`}).join("")}
+    <td class="sc" data-score="${r.id}"></td><td><button class="btn x" data-del="r" data-id="${r.id}">✕</button></td></tr>`).join("")||`<tr><td colspan="${S.c.length+4}" class="empty">Brak ocen – dodaj pierwszą.</td></tr>`}</table></div>
+    <div style="margin:10px 0"><button class="btn" data-add="r">+ Dodaj ocenę</button> <span class="mu">${S.c.length?"":"Najpierw dodaj kryteria."}</span></div>
+    <h3 style="margin:14px 0 6px">Legenda skali 1–5 (dla każdego kryterium)</h3><table class="leg">${LEG.map(([i,t])=>`<tr><td class="c s${i}" style="width:60px"><b>${i}</b></td><td>${t}</td></tr>`).join("")}</table></div>`;
+  }
+  if(tab==="k"){
+    const R=ranking();
+    v.innerHTML=`<div class="card"><div class="scroll"><table><tr><th>Miejsce</th><th>Model</th><th class="c">Wynik średni (1–5)</th><th class="c">Liczba ocen</th>${S.s.map(s=>`<th class="c">${esc(lab(s,"(scen.)"))}</th>`).join("")}</tr>
+    ${R.map(x=>`<tr class="${x.rank===1?"rank1":""}"><td class="c">${x.rank??"–"}</td><td>${esc(lab(x.m,"(model bez nazwy)"))}</td><td class="sc">${f1(x.avg)}</td><td class="c">${x.n}</td>${S.s.map(s=>`<td class="sc ${cls(x.per[s.id])}">${f1(x.per[s.id])}</td>`).join("")}</tr>`).join("")||`<tr><td colspan="4" class="empty">Dodaj kandydatów i oceny, aby zobaczyć ranking.</td></tr>`}</table></div>
+    <p class="mu">Wynik = średnia ważona ocen z wagami kryteriów; pomijane są puste oceny (pozostałe wagi przeliczają się proporcjonalnie). Remisy dają to samo miejsce.</p>
+    <button class="btn sec" id="reset">Wyczyść wszystkie dane</button></div>`;
+  }
+  refresh();
+}
+function refresh(){
+  if($("sumw")){const s=sumW();$("sumw").textContent=Math.round(s*100)/100+"%";
+    $("wmsg").innerHTML=!S.c.length?"":Math.abs(s-100)<0.01?'<span class="ok">✔ Suma wag = 100%</span>':'<span class="bad">⚠ Suma wag powinna wynosić 100%</span>'}
+  document.querySelectorAll("[data-score]").forEach(td=>{const r=S.r.find(x=>x.id===td.dataset.score);const v=r&&r.m&&r.s?score(r):null;td.textContent=f1(v);td.className="sc "+cls(v)})
+}
+document.addEventListener("click",e=>{
+  const t=e.target;
+  if(t.dataset.tab){tab=t.dataset.tab;view();return}
+  if(t.dataset.add){const k=t.dataset.add;
+    S[k].push(k==="c"?{id:uid(),name:"",w:0}:k==="s"?{id:uid(),name:"",prompt:"",notes:""}:k==="m"?{id:uid(),name:"",desc:""}:{id:uid(),m:"",s:"",v:{}});save();view();return}
+  if(t.dataset.del){const k=t.dataset.del,id=t.dataset.id;S[k]=S[k].filter(x=>x.id!==id);
+    if(k==="m")S.r=S.r.filter(r=>r.m!==id);if(k==="s")S.r=S.r.filter(r=>r.s!==id);save();view();return}
+  if(t.id==="eq"&&S.c.length){const w=Math.round(10000/S.c.length)/100;S.c.forEach(c=>c.w=w);save();view();return}
+  if(t.id==="reset"&&confirm("Usunąć wszystkie dane?")){S={c:[],s:[],m:[],r:[]};save();view()}
+});
+document.addEventListener("input",e=>{
+  const t=e.target,d=t.dataset;if(!d.t)return;
+  const o=S[d.t].find(x=>x.id===d.id);if(!o)return;
+  if(d.cid){o.v[d.cid]=t.value;t.className=t.value?"s"+t.value:""}
+  else o[d.f]=d.f==="w"?Math.max(0,+t.value||0):t.value;
+  save();refresh();
+});
+view();
+</script>
+</body>
+</html>
