@@ -43,6 +43,7 @@ input.w{width:80px;text-align:center}
 <nav id="nav"></nav>
 <div id="view"></div>
 </main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const LEG=[[1,"Nie spełnia wymagań, poważne błędy"],[2,"Spełnia wymagania w ograniczonym zakresie, częste błędy"],[3,"Akceptowalny, ale wymaga poprawek lub nadzoru"],[4,"Dobry, sporadyczne drobne błędy"],[5,"Bardzo dobry, spełnia wymagania w sposób konsekwentny"]];
 const TABS=[["c","Kryteria"],["s","Scenariusze"],["m","Kandydaci"],["r","Oceny"],["k","Ranking"]];
@@ -98,7 +99,7 @@ function view(){
     v.innerHTML=`<div class="card"><div class="scroll"><table><tr><th>Miejsce</th><th>Model</th><th class="c">Wynik średni (1–5)</th><th class="c">Liczba ocen</th>${S.s.map(s=>`<th class="c">${esc(lab(s,"(scen.)"))}</th>`).join("")}</tr>
     ${R.map(x=>`<tr class="${x.rank===1?"rank1":""}"><td class="c">${x.rank??"–"}</td><td>${esc(lab(x.m,"(model bez nazwy)"))}</td><td class="sc">${f1(x.avg)}</td><td class="c">${x.n}</td>${S.s.map(s=>`<td class="sc ${cls(x.per[s.id])}">${f1(x.per[s.id])}</td>`).join("")}</tr>`).join("")||`<tr><td colspan="4" class="empty">Dodaj kandydatów i oceny, aby zobaczyć ranking.</td></tr>`}</table></div>
     <p class="mu">Wynik = średnia ważona ocen z wagami kryteriów; pomijane są puste oceny (pozostałe wagi przeliczają się proporcjonalnie). Remisy dają to samo miejsce.</p>
-    <button class="btn sec" id="reset">Wyczyść wszystkie dane</button></div>`;
+    ${DL?`<h3 style="margin:14px 0 6px">Eksport</h3><div class="row"><button class="btn" id="xx">Pobierz Excel (.xlsx)</button><button class="btn sec" id="xr">CSV – ranking</button><button class="btn sec" id="xo">CSV – oceny</button><span id="xmsg" class="mu"></span></div><p class="mu">Plik Excel zawiera wszystkie zakładki: Kryteria, Scenariusze, Kandydaci, Oceny i Ranking. Pliki CSV używają średnika i przecinka dziesiętnego (polski Excel).</p>`:""}<div style="margin-top:14px"><button class="btn sec" id="reset">Wyczyść wszystkie dane</button></div></div>`;
   }
   refresh();
 }
@@ -124,6 +125,41 @@ document.addEventListener("input",e=>{
   else o[d.f]=d.f==="w"?Math.max(0,+t.value||0):t.value;
   save();refresh();
 });
+let DL=null;
+const r2=x=>x==null?"":Math.round(x*100)/100;
+function tabs(){
+  const R=ranking(),cn=S.c.map(c=>lab(c,"(kryt.)")),sn=S.s.map(s=>lab(s,"(scen.)"));
+  const rank=[["Miejsce","Model","Wynik średni (1–5)","Liczba ocen",...sn],...R.map(x=>[x.rank??"",lab(x.m,"(model bez nazwy)"),r2(x.avg),x.n,...S.s.map(s=>r2(x.per[s.id]))])];
+  const rows=S.r.filter(r=>r.m&&r.s).map(r=>{const m=S.m.find(x=>x.id===r.m),s=S.s.find(x=>x.id===r.s);return [lab(m,"(model bez nazwy)"),lab(s,"(scen.)"),...S.c.map(c=>r.v[c.id]?+r.v[c.id]:""),r2(score(r))]});
+  const oc=[["Model","Scenariusz",...cn,"Wynik ważony (1–5)"],...rows];
+  return {
+    "Kryteria":[["Kryterium","Waga (%)"],...S.c.map(c=>[c.name,+c.w])],
+    "Scenariusze":[["Nazwa","Prompt","Oczekiwany rezultat / uwagi"],...S.s.map(s=>[s.name,s.prompt,s.notes])],
+    "Kandydaci":[["Model","Opis / wersja"],...S.m.map(m=>[m.name,m.desc])],
+    "Oceny":oc,"Ranking":rank};
+}
+function csv(rows){
+  const q=v=>{if(typeof v==="number")return String(v).replace(".",",");let s=String(v??"");if(/^[=+\-@]/.test(s))s="'"+s;return /[";\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+  return "\ufeff"+rows.map(r=>r.map(q).join(";")).join("\r\n");
+}
+async function dl(name,data){
+  const m=$("xmsg");
+  try{await DL.save({filename:name,data});if(m)m.textContent="Zapisano: "+name}
+  catch(e){if(m)m.textContent=e&&e.code==="declined"?"Anulowano.":"Nie udało się zapisać pliku."}
+}
+document.addEventListener("click",e=>{
+  const id=e.target.id;if(!DL||!["xx","xr","xo"].includes(id))return;
+  const T=tabs(),d=new Date().toISOString().slice(0,10);
+  if(id==="xr")dl("ranking-"+d+".csv",csv(T.Ranking));
+  else if(id==="xo")dl("oceny-"+d+".csv",csv(T.Oceny));
+  else{
+    if(typeof XLSX==="undefined"){$("xmsg").textContent="Biblioteka Excel nie załadowała się – użyj CSV.";return}
+    const wb=XLSX.utils.book_new();
+    Object.entries(T).forEach(([n,rows])=>{const ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=rows[0].map((_,i)=>({wch:Math.min(60,Math.max(12,...rows.map(r=>String(r[i]??"").length)))}));XLSX.utils.book_append_sheet(wb,ws,n)});
+    dl("wybor-modelu-"+d+".xlsx",XLSX.write(wb,{type:"array",bookType:"xlsx"}));
+  }
+});
+try{if(window.claude&&claude.use)claude.use("downloads").then(x=>{DL=x;if(tab==="k")view()}).catch(()=>{})}catch(e){}
 view();
 </script>
 </body>
