@@ -159,7 +159,8 @@ document.addEventListener("click",e=>{
     dl("wybor-modelu-"+d+".xlsx",XLSX.write(wb,{type:"array",bookType:"xlsx"}));
   }
 });
-try{if(window.claude&&claude.use)claude.use("downloads").then(x=>{DL=x;if(tab==="k")view()}).catch(()=>{})}catch(e){}
+const BROWSER_DL={save:async({filename,data})=>{const b=data instanceof Blob?data:new Blob([data],{type:/\.csv$/.test(filename)?"text/csv;charset=utf-8":"application/octet-stream"});const u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500);return {status:"saved"}}};
+try{if(window.claude&&claude.use)claude.use("downloads").then(x=>{DL=x;if(tab==="k")view()}).catch(()=>{});else DL=BROWSER_DL}catch(e){DL=BROWSER_DL}
 view();
 </script>
 </body>
